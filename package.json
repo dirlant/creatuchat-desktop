@@ -8,10 +8,9 @@
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "sync-ext": "node scripts/sync-ext.js",
-    "start": "npm run sync-ext && electron .",
-    "selftest": "npm run sync-ext && electron . --selftest",
-    "dist": "npm run sync-ext && electron-builder --win"
+    "start": "electron .",
+    "selftest": "electron . --selftest",
+    "dist": "electron-builder --win"
   },
   "dependencies": {
     "electron-updater": "^6.8.11"
