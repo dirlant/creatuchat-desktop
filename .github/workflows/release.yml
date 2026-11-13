@@ -1,17 +1,38 @@
-# Al subir una etiqueta de versión (por ejemplo v0.1.5) se compilan los instaladores de Windows y de Mac
+# Al subir una etiqueta de versión (por ejemplo v0.1.7) se compilan los instaladores de Windows y de Mac
 # y se publican en el Release de GitHub, junto con los archivos que usa la actualización automática.
+# También se puede lanzar a mano (Actions > Publicar versión > Run workflow) indicando una etiqueta existente.
 name: Publicar versión
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Etiqueta a compilar y publicar (ej. v0.1.6)'
+        required: true
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Crear el Release si no existe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Creatuchat ${TAG#v}" --notes "Instaladores de Windows y Mac. La app se actualiza sola desde el botón Actualizar."
+
   instaladores:
+    needs: release
     strategy:
       fail-fast: false
-      max-parallel: 1 # uno a la vez: evita que dos trabajos creen el Release al mismo tiempo
       matrix:
         include:
           - os: windows-latest
@@ -23,12 +44,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Compilar y publicar
-        run: npx electron-builder ${{ matrix.objetivo }} --publish always
+      - name: Compilar
+        run: npx electron-builder ${{ matrix.objetivo }} --publish never
+      - name: Subir al Release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          archivos=(dist/*.exe dist/*.dmg dist/*.zip dist/*.blockmap dist/latest*.yml)
+          echo "Subiendo ${#archivos[@]} archivos"
+          gh release upload "$TAG" "${archivos[@]}" --repo "$GITHUB_REPOSITORY" --clobber
