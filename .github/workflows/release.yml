@@ -11,6 +11,7 @@ jobs:
   instaladores:
     strategy:
       fail-fast: false
+      max-parallel: 1 # uno a la vez: evita que dos trabajos creen el Release al mismo tiempo
       matrix:
         include:
           - os: windows-latest
