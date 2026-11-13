@@ -63,6 +63,8 @@ const post = async (endpoint, body) => {
 // ---------- actualizaciones automáticas (electron-updater + GitHub Releases) ----------
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
+// En Mac la app no está firmada con una cuenta de Apple: no puede instalarse sola, así que se ofrece abrir la página de descarga
+const MAC_SIN_FIRMA = process.platform === 'darwin';
 let updateInfo = {}; // versión nueva encontrada (la lee el panel para mostrar «Nueva actualización»)
 let manualCheck = false;
 const msg = (opts) => dialog.showMessageBox(win || undefined, { type: 'info', ...opts });
@@ -70,6 +72,11 @@ autoUpdater.on('update-available', async (info) => {
   updateInfo = info || {};
   if (!manualCheck) return; // la revisión automática solo avisa en el panel
   manualCheck = false;
+  if (MAC_SIN_FIRMA) {
+    const m = await msg({ message: 'Hay una nueva versión de Creatuchat (' + info.version + ').', detail: 'En Mac descárgala desde GitHub e instálala sobre la actual (tu sesión y tu configuración se conservan).', buttons: ['Abrir la descarga', 'Más tarde'], defaultId: 0, cancelId: 1 });
+    if (m.response === 0) shell.openExternal('https://github.com/dirlant/creatuchat-desktop/releases/latest');
+    return;
+  }
   const r = await msg({ message: 'Hay una nueva versión de Creatuchat (' + info.version + ').', detail: '¿Quieres descargarla e instalarla ahora?', buttons: ['Descargar e instalar', 'Más tarde'], defaultId: 0, cancelId: 1 });
   if (r.response === 0) autoUpdater.downloadUpdate().catch((e) => dialog.showErrorBox('Actualización', e.message));
 });

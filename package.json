@@ -1,7 +1,7 @@
 {
   "name": "creatuchat-desktop",
   "productName": "Creatuchat",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Creatuchat: WhatsApp Web con envíos automáticos y asistente con IA, como aplicación de escritorio.",
   "main": "main.js",
   "author": "Creatuchat",
@@ -50,8 +50,34 @@
       {
         "provider": "github",
         "owner": "dirlant",
-        "repo": "creatuchat-desktop"
+        "repo": "creatuchat-desktop",
+        "releaseType": "release"
       }
-    ]
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.business",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "artifactName": "Creatuchat-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Creatuchat ${version}"
+    }
   }
 }

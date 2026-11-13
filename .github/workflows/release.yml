@@ -1,0 +1,33 @@
+# Al subir una etiqueta de versión (por ejemplo v0.1.5) se compilan los instaladores de Windows y de Mac
+# y se publican en el Release de GitHub, junto con los archivos que usa la actualización automática.
+name: Publicar versión
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  instaladores:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            objetivo: --win
+          - os: macos-latest
+            objetivo: --mac
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Compilar y publicar
+        run: npx electron-builder ${{ matrix.objetivo }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
