@@ -106,6 +106,7 @@
       <div class="wam-aboutrow"><span>Licencia</span><span id="wam-licstat"></span></div>
       <div class="wam-aboutrow"><span>Número de WhatsApp</span><b id="wam-aboutnum">…</b></div>
       <div class="wam-aboutrow"><span>Versión</span><b id="wam-aboutver"></b></div>
+      <div class="wam-aboutrow"><span>Comunidad</span><a href="https://chat.whatsapp.com/LoEpBGHQy82CgluRUQz7mP?s=sh&amp;p=a&amp;iam=2" target="_blank" rel="noopener noreferrer">Grupo de WhatsApp</a></div>
       <button id="wam-changelic" class="wam-btn alt">Cambiar licencia</button>
     </div>
 
@@ -125,6 +126,11 @@
     </div>
 
     <div id="wam-avbar" class="wam-avbar" hidden></div>
+    <div id="wam-comu" class="wam-comu" hidden>
+      <div><b>Únete a la comunidad Creatuchat</b><span>Consejos de uso, novedades y soporte en un grupo de WhatsApp.</span></div>
+      <a class="wam-btn" href="https://chat.whatsapp.com/LoEpBGHQy82CgluRUQz7mP?s=sh&amp;p=a&amp;iam=2" target="_blank" rel="noopener noreferrer">Unirme</a>
+      <button id="wam-comu-x" title="Ocultar esta invitación" aria-label="Ocultar">×</button>
+    </div>
 
     <div class="wam-tabbar wam-seg">
       <button data-tab="auto" class="on">Envío Automático</button>
@@ -2325,6 +2331,9 @@
   setInterval(() => iaScan(false), IA_SCAN_MS);
 
   // ---------- init ----------
+  // invitación a la comunidad: se muestra hasta que la persona la oculta (el enlace sigue en «Acerca»)
+  chrome.storage.local.get('wamComu').then(({ wamComu }) => { $('#wam-comu').hidden = !!(wamComu && wamComu.oculta); });
+  $('#wam-comu-x').onclick = () => { $('#wam-comu').hidden = true; chrome.storage.local.set({ wamComu: { oculta: true } }); };
   chrome.storage.local.get('wamTrial').then(({ wamTrial }) => {
     if (wamTrial && Number(wamTrial.start)) prueba = { start: Number(wamTrial.start) };
     else {

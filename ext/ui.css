@@ -230,3 +230,9 @@ details.wam-more>.wam-hint{margin:2px 0 4px}
 .wam-head #wam-dl{font-size:12px;padding:4px 8px;white-space:nowrap}
 
 #wam-gate a.wam-btn{display:block;text-align:center;text-decoration:none;margin-top:8px}
+
+.wam-comu{display:flex;align-items:center;gap:10px;margin:8px 14px 0;padding:9px 10px 9px 12px;border-radius:12px;background:var(--card);border:1px solid var(--pink,#e6177a);flex:0 0 auto}
+.wam-comu>div{flex:1;min-width:0;font-size:12.5px;line-height:1.35;color:var(--sub)}
+.wam-comu b{display:block;font-size:13.5px;color:var(--text)}
+.wam-comu a.wam-btn{flex:none;width:auto;margin:0;padding:7px 14px;text-decoration:none;font-size:13px}
+.wam-comu button{flex:none;border:0;background:none;color:var(--sub);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}

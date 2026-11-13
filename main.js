@@ -139,6 +139,7 @@ const crearMenu = () => {
       submenu: [
         { label: 'Mostrar / ocultar panel', accelerator: 'CmdOrCtrl+Shift+P', click: toggle },
         { label: 'Buscar actualizaciones', click: () => buscarActualizaciones(true) },
+        { label: 'Comunidad Creatuchat en WhatsApp', click: () => shell.openExternal('https://chat.whatsapp.com/LoEpBGHQy82CgluRUQz7mP?s=sh&p=a&iam=2') },
         { type: 'separator' },
         { label: 'Recargar WhatsApp', accelerator: 'CmdOrCtrl+R', click: () => win && win.webContents.reload() },
         { label: 'Herramientas de desarrollo', accelerator: 'F12', click: () => win && win.webContents.toggleDevTools() },
