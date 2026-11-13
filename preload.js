@@ -37,7 +37,7 @@ if (location.hostname === 'web.whatsapp.com') {
     runtime: {
       lastError: undefined,
       getURL: (p) => dataUrl(p),
-      getManifest: () => ({ name: 'Creatuchat', version: pkg.version }),
+      getManifest: () => ({ name: 'Creatuchat', version: pkg.version, desktop: true }),
       sendMessage: (m, cb) => {
         const p = ipcRenderer.invoke('bg:message', m);
         if (typeof cb === 'function') { p.then((r) => cb(r), (e) => cb({ error: e.message })); return; }

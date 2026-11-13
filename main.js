@@ -87,6 +87,17 @@ autoUpdater.on('error', (e) => {
   if (win) win.setProgressBar(-1);
   if (manualCheck) { manualCheck = false; dialog.showErrorBox('No se pudo buscar actualizaciones', (e && e.message) || String(e)); }
 });
+// consulta GitHub Releases y devuelve la versión nueva ('' si no hay); se reutiliza el resultado durante 1 minuto
+let ultimaConsulta = { t: 0, p: null };
+const consultarActualizacion = () => {
+  if (!app.isPackaged) return Promise.resolve('');
+  if (ultimaConsulta.p && Date.now() - ultimaConsulta.t < 60000) return ultimaConsulta.p;
+  ultimaConsulta.t = Date.now();
+  ultimaConsulta.p = autoUpdater.checkForUpdates()
+    .then((r) => { const v = r && r.isUpdateAvailable && r.updateInfo ? r.updateInfo.version : ''; updateInfo = v ? r.updateInfo : {}; return v; })
+    .catch(() => '');
+  return ultimaConsulta.p;
+};
 const buscarActualizaciones = (manual) => {
   if (!app.isPackaged) {
     if (manual) msg({ message: 'Las actualizaciones funcionan en la app instalada.', detail: 'Estás en modo desarrollo.' });
@@ -105,7 +116,7 @@ ipcMain.handle('bg:message', async (_e, m) => {
     case 'wam-license': return post('licencia-whatsapp', { token: m.token, numero: m.numero });
     case 'wam-notifs': return post('notificaciones-whatsapp', { token: m.token, numero: m.numero, ...(m.leida ? { leida: String(m.leida) } : {}) });
     case 'wam-ia': return post('ia-whatsapp', m.payload || {});
-    case 'wam-update': buscarActualizaciones(false); return { status: 200, version: updateInfo.version || '' };
+    case 'wam-update': return { status: 200, version: await consultarActualizacion() };
     case 'wam-badge': try { app.setBadgeCount(Math.min(m.count || 0, 99)); } catch {} return;
     case 'wam-open-sync': buscarActualizaciones(true); return;
     default: return;
@@ -188,8 +199,7 @@ else {
     crearVentana();
     app.on('before-quit', flushStore);
     if (SELFTEST) return selftest();
-    setTimeout(() => buscarActualizaciones(false), 15000);
-    setInterval(() => buscarActualizaciones(false), 6 * 3600 * 1000);
+    consultarActualizacion(); // al abrir la app: se verifica enseguida (el panel vuelve a preguntar cada hora)
   });
   app.on('window-all-closed', () => app.quit());
 }
