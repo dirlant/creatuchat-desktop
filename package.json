@@ -43,7 +43,7 @@
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
       "shortcutName": "Creatuchat",
-      "artifactName": "Creatuchat-Setup-${version}.${ext}"
+      "artifactName": "Creatuchat-Setup.${ext}"
     },
     "publish": [
       {
@@ -73,7 +73,7 @@
       "category": "public.app-category.business",
       "icon": "build/icon.png",
       "identity": "-",
-      "artifactName": "Creatuchat-${version}-mac-${arch}.${ext}"
+      "artifactName": "Creatuchat-mac-${arch}.${ext}"
     },
     "dmg": {
       "title": "Creatuchat ${version}"
