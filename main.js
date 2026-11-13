@@ -202,6 +202,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) app.quit();
 else {
   app.whenReady().then(() => {
     loadStore();
+    if (SELFTEST && process.argv.includes('--prueba-vencida')) store.wamTrial = { start: Date.now() - 20 * 86400000 }; // prueba de desarrollo: la prueba gratis ya terminó
     crearMenu();
     crearVentana();
     app.on('before-quit', flushStore);
@@ -241,6 +242,13 @@ async function selftest() {
       }
       wc.send('toggle-panel');
       await new Promise((r) => setTimeout(r, 2500));
+      if (process.argv.includes('--probar-prueba')) {
+        diag.estado = await wc.executeJavaScript(`document.getElementById('wam-licstat').textContent`);
+        await wc.executeJavaScript(`document.querySelector('#wam-source button[data-src="label"]').click()`);
+        await new Promise((r) => setTimeout(r, 1500));
+        diag.origenActivo = await wc.executeJavaScript(`document.querySelector('#wam-source button.on').dataset.src`);
+        diag.pantallaLicencia = await wc.executeJavaScript(`!document.getElementById('wam-gate').hidden`);
+      }
       diag.panelVisible = await wc.executeJavaScript(`(() => { const p = document.getElementById('wam-panel'); return !!p && !p.hidden; })()`);
       diag.licenciaVisible = await wc.executeJavaScript(`(() => { const g = document.getElementById('wam-gate'); return !!g && !g.hidden; })()`);
       const img = await wc.capturePage();

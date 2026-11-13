@@ -663,8 +663,8 @@
   panel.querySelectorAll('#wam-source button').forEach((b) => {
     b.onclick = async () => {
       if (b.dataset.src === cfg.source) return;
-      if (b.dataset.src !== 'numeros' && !lic.valid && !(lic.token && (await checkLicense()))) {
-        if (!lic.reason) lic.reason = 'Para enviar por etiquetas o por Excel necesitas una licencia. El envío manual por número y las palabras clave son gratis.';
+      if (b.dataset.src !== 'numeros' && !lic.valid && !enPrueba() && !(lic.token && (await checkLicense()))) {
+        if (!lic.reason) lic.reason = MSG_LIC();
         gateOpen = true; renderLic();
         return;
       }
@@ -932,17 +932,28 @@
   let gateOpen = false;
   const saveLic = () => chrome.storage.local.set({ wamLic: { token: lic.token, valid: lic.valid, ia: lic.ia, until: lic.until, number: lic.number, checkedAt: lic.checkedAt } });
 
+  // ---------- prueba gratis: 15 días con todo menos la IA; después, licencia para etiquetas, Excel e IA ----------
+  const PRUEBA_DIAS = 15;
+  let prueba = { start: 0 }; // se guarda en wamTrial la primera vez que se abre el panel
+  const pruebaFin = () => (prueba.start ? prueba.start + PRUEBA_DIAS * 86400000 : 0);
+  const enPrueba = () => !prueba.start || Date.now() < pruebaFin(); // sin fecha todavía (aún cargando) se considera en prueba
+  const pruebaTerminada = () => !!prueba.start && Date.now() >= pruebaFin();
+  const pruebaDias = () => Math.max(0, Math.ceil((pruebaFin() - Date.now()) / 86400000));
+  const MSG_LIC = () => (pruebaTerminada()
+    ? 'Terminó tu prueba gratis de ' + PRUEBA_DIAS + ' días. Para seguir usando etiquetas y Excel necesitas una licencia. El envío manual por número y las palabras clave siguen siendo gratis.'
+    : 'Para enviar por etiquetas o por Excel necesitas una licencia. El envío manual por número y las palabras clave son gratis.');
   // Soporte por WhatsApp: el mensaje cambia según el caso (licencia vencida, otro problema o pedir una licencia)
   const SOPORTE_TEL = '584122837925';
   const mensajeSoporte = () => {
     const num = lic.number ? ' Mi número de WhatsApp: +' + lic.number + '.' : '';
     if (lic.token && lic.motivo === 'licencia_vencida') return { texto: 'Renovar mi licencia por WhatsApp', msg: 'Hola, mi licencia de Creatuchat está vencida' + (lic.until ? ' (venció el ' + lic.until + ')' : '') + '. Quisiera renovarla.' + num };
     if (lic.token && lic.motivo) return { texto: 'Pedir ayuda con mi licencia por WhatsApp', msg: 'Hola, tengo un problema con mi licencia de Creatuchat: ' + (LIC_REASONS[lic.motivo] || lic.motivo) + num };
+    if (!lic.token && pruebaTerminada()) return { texto: 'Solicitar licencia por WhatsApp', msg: 'Hola, mi prueba gratis de Creatuchat terminó y quiero solicitar una licencia.' + num };
     return { texto: 'Solicitar licencia por WhatsApp', msg: 'Hola, quiero solicitar una licencia de Creatuchat.' + num };
   };
   const renderLic = () => {
     const st = $('#wam-licstat');
-    st.textContent = !lic.token ? 'Versión gratuita' : lic.checking ? 'Verificando…' : lic.valid ? 'Licencia hasta ' + lic.until : 'Licencia no válida';
+    st.textContent = !lic.token ? (enPrueba() && prueba.start ? 'Prueba gratis: ' + pruebaDias() + (pruebaDias() === 1 ? ' día restante' : ' días restantes') : 'Versión gratuita') : lic.checking ? 'Verificando…' : lic.valid ? 'Licencia hasta ' + lic.until : 'Licencia no válida';
     st.className = lic.valid || !lic.token ? 'ok' : 'bad';
     $('#wam-num').textContent = lic.number ? '+' + lic.number : 'no disponible aún';
     $('#wam-aboutnum').textContent = lic.number ? '+' + lic.number : 'no disponible aún';
@@ -1001,7 +1012,7 @@
     log(motivo + ' Se pasó al envío Manual, que es gratis.', 'err');
   };
   const checkLicense = async () => {
-    if (!lic.token) { lic.valid = false; lic.reason = ''; renderLic(); forzarManual('Sin licencia: las etiquetas y el Excel la necesitan.'); return false; }
+    if (!lic.token) { lic.valid = false; lic.reason = ''; renderLic(); if (!enPrueba()) forzarManual(MSG_LIC()); return false; }
     lic.checking = true; renderLic();
     try {
       const me = { number: await myNumber() };
@@ -1017,7 +1028,7 @@
           lic.valid = true; lic.motivo = ''; lic.ia = r.data.ia === true; lic.until = r.data.fecha_vencimiento || ''; lic.reason = ''; lic.checkedAt = Date.now();
         } else {
           lic.valid = false; lic.ia = false; lic.motivo = r.data.motivo || ''; lic.reason = LIC_REASONS[r.data.motivo] || 'Licencia no válida.';
-          forzarManual(lic.reason);
+          if (!enPrueba()) forzarManual(lic.reason);
         }
       } else if (r.status === 400) {
         lic.valid = false; lic.reason = 'Falta el token o el número.';
@@ -1282,8 +1293,8 @@
       return;
     }
     const requiereLic = (resume === true && job ? job.source : cfg.source) !== 'numeros'; // el envío manual por número es gratis
-    if (requiereLic && !(await checkLicense())) {
-      if (!lic.reason) lic.reason = 'Para enviar por etiquetas o por Excel necesitas una licencia. El envío manual por número y las palabras clave son gratis.';
+    if (requiereLic && !enPrueba() && !(await checkLicense())) {
+      if (!lic.reason) lic.reason = MSG_LIC();
       gateOpen = true; renderLic();
       return log(lic.reason || 'Licencia no válida', 'err');
     }
@@ -1331,7 +1342,7 @@
       if (run.stop) break;
       if (requiereLic && Date.now() - lastLic > 30 * 60 * 1000) {
         lastLic = Date.now();
-        if (!(await checkLicense())) { log('Envío detenido: ' + (lic.reason || 'licencia no válida'), 'err'); break; }
+        if (!enPrueba() && !(await checkLicense())) { log('Envío detenido: ' + (lic.reason || 'licencia no válida'), 'err'); break; }
       }
       if (sentToday() >= dailyAllowance()) { log(`Límite diario alcanzado (${sentToday()} hoy). Continúa mañana.`, 'err'); break; }
       if (hoursActive() && !inWindow()) {
@@ -2314,6 +2325,15 @@
   setInterval(() => iaScan(false), IA_SCAN_MS);
 
   // ---------- init ----------
+  chrome.storage.local.get('wamTrial').then(({ wamTrial }) => {
+    if (wamTrial && Number(wamTrial.start)) prueba = { start: Number(wamTrial.start) };
+    else {
+      prueba = { start: Date.now() };
+      chrome.storage.local.set({ wamTrial: prueba });
+      log('Prueba gratis de ' + PRUEBA_DIAS + ' días iniciada: puedes usar etiquetas y Excel (la IA requiere licencia).', 'ok');
+    }
+    renderLic();
+  });
   chrome.storage.local.get('wamLic').then(({ wamLic }) => {
     if (wamLic) lic = { ...lic, ...wamLic, valid: false, checking: false, reason: wamLic.token ? 'Verificando licencia…' : '' };
     renderLic();
