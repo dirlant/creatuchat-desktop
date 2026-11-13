@@ -1,0 +1,56 @@
+{
+  "name": "creatuchat-desktop",
+  "productName": "Creatuchat",
+  "version": "0.1.0",
+  "description": "Creatuchat: WhatsApp Web con envíos automáticos y asistente con IA, como aplicación de escritorio.",
+  "main": "main.js",
+  "author": "Creatuchat",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "sync-ext": "node scripts/sync-ext.js",
+    "start": "npm run sync-ext && electron .",
+    "selftest": "npm run sync-ext && electron . --selftest",
+    "dist": "npm run sync-ext && electron-builder --win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.creatuchat.desktop",
+    "productName": "Creatuchat",
+    "files": [
+      "main.js",
+      "preload.js",
+      "ext/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "Creatuchat"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "dirlant",
+        "repo": "creatuchat-desktop"
+      }
+    ]
+  }
+}
