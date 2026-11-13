@@ -938,7 +938,7 @@
   let gateOpen = false;
   const saveLic = () => chrome.storage.local.set({ wamLic: { token: lic.token, valid: lic.valid, ia: lic.ia, until: lic.until, number: lic.number, checkedAt: lic.checkedAt } });
 
-  // ---------- prueba gratis: 15 días con todo menos la IA; después, licencia para etiquetas, Excel e IA ----------
+  // ---------- prueba gratis: 15 días con todo menos la IA; después solo el envío Manual es gratis (etiquetas, Excel, palabras clave e IA requieren licencia) ----------
   const PRUEBA_DIAS = 15;
   let prueba = { start: 0 }; // se guarda en wamTrial la primera vez que se abre el panel
   const pruebaFin = () => (prueba.start ? prueba.start + PRUEBA_DIAS * 86400000 : 0);
@@ -946,8 +946,8 @@
   const pruebaTerminada = () => !!prueba.start && Date.now() >= pruebaFin();
   const pruebaDias = () => Math.max(0, Math.ceil((pruebaFin() - Date.now()) / 86400000));
   const MSG_LIC = () => (pruebaTerminada()
-    ? 'Terminó tu prueba gratis de ' + PRUEBA_DIAS + ' días. Para seguir usando etiquetas y Excel necesitas una licencia. El envío manual por número y las palabras clave siguen siendo gratis.'
-    : 'Para enviar por etiquetas o por Excel necesitas una licencia. El envío manual por número y las palabras clave son gratis.');
+    ? 'Terminó tu prueba gratis de ' + PRUEBA_DIAS + ' días. Para seguir usando etiquetas, Excel, palabras clave y la IA necesitas una licencia. Solo el envío manual (pegar los números) sigue siendo gratis.'
+    : 'Para usar etiquetas, Excel, palabras clave o la IA necesitas una licencia. Solo el envío manual (pegar los números) es gratis.');
   // Soporte por WhatsApp: el mensaje cambia según el caso (licencia vencida, otro problema o pedir una licencia)
   const SOPORTE_TEL = '584122837925';
   const mensajeSoporte = () => {
@@ -2184,13 +2184,15 @@
     if (k.length > 500) k.slice(0, k.length - 500).forEach((x) => delete kwSeen[x]);
     chrome.storage.local.set({ wamKw: { seen: kwSeen, pasosT: kwPasosT } });
   };
-  const kwCanRun = () => !!(cfg.kw.on && !kwEditando() && !cfg.ia.on); // gratis: no requiere licencia
+  const kwPermitido = () => enPrueba() || !!lic.valid; // las palabras clave son de la prueba o de licencia; sin ellas solo queda el envío Manual
+  const kwCanRun = () => !!(cfg.kw.on && !kwEditando() && !cfg.ia.on && kwPermitido());
   const renderKwRun = () => {
     const on = !!cfg.kw.on;
     $('#wam-kwstart').disabled = on;
     $('#wam-kwpause').disabled = !on;
     $('#wam-kwstart').textContent = on ? 'En marcha' : 'Iniciar';
     if (!on) setKwStatus('Apagado: no responde a palabras clave.');
+    else if (!kwPermitido()) setKwStatus('En pausa: tu prueba terminó y las palabras clave requieren licencia.');
   };
   const kwHold = () => {
     if (!cfg.kw.on) return;
@@ -2200,6 +2202,7 @@
     kwHoldTimer = setTimeout(() => { kwHoldUntil = 0; if (cfg.kw.on) kwScan(true); }, KW_HOLD_MS + 100);
   };
   const kwScan = async (manual = false, onlyIds = null) => {
+    if (cfg.kw.on && !kwPermitido()) { renderKwRun(); return; }
     if (!kwCanRun()) return;
     const full = !onlyIds;
     if (full && kwBusy) return;
@@ -2243,6 +2246,7 @@
   };
   const kwStart = () => {
     if (cfg.kw.on) return;
+    if (!kwPermitido()) { lic.reason = MSG_LIC(); gateOpen = true; renderLic(); setKwStatus('Las palabras clave requieren licencia.'); return; }
     if (cfg.ia.on) { setKwStatus('La IA está en marcha: pausa la IA para usar las respuestas por palabra clave. Solo puede funcionar una de las dos.'); return; }
     if (!iaKwLista(cfg.kw).some((k) => iaPasosDe(k, cfg.kw))) { setKwStatus('Agrega al menos una palabra clave con pasos activos y completos.'); return; }
     if (!confirm('Cuando un cliente escriba una de tus palabras clave, se le enviarán los pasos automáticamente. ¿Iniciar?')) return;
@@ -2339,7 +2343,7 @@
     else {
       prueba = { start: Date.now() };
       chrome.storage.local.set({ wamTrial: prueba });
-      log('Prueba gratis de ' + PRUEBA_DIAS + ' días iniciada: puedes usar etiquetas y Excel (la IA requiere licencia).', 'ok');
+      log('Prueba gratis de ' + PRUEBA_DIAS + ' días iniciada: puedes usar etiquetas, Excel y palabras clave (la IA requiere licencia).', 'ok');
     }
     renderLic();
   });

@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, Menu, shell, dialog, net } = require('elect
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
 
 const API = 'https://agendaconmigo-api.vercel.app/api/';
@@ -67,6 +68,9 @@ autoUpdater.autoInstallOnAppQuit = true;
 const MAC_SIN_FIRMA = process.platform === 'darwin';
 let updateInfo = {}; // versión nueva encontrada (la lee el panel para mostrar «Nueva actualización»)
 let manualCheck = false;
+let forzando = false; // actualización obligatoria en curso (versión gratuita)
+let ventanaForzar = null;
+const estadoForzado = (st) => { try { if (ventanaForzar && !ventanaForzar.isDestroyed()) ventanaForzar.webContents.send('forzar:estado', st); } catch {} };
 const msg = (opts) => dialog.showMessageBox(win || undefined, { type: 'info', ...opts });
 autoUpdater.on('update-available', async (info) => {
   updateInfo = info || {};
@@ -84,14 +88,16 @@ autoUpdater.on('update-not-available', () => {
   updateInfo = {};
   if (manualCheck) { manualCheck = false; msg({ message: 'Ya tienes la última versión de Creatuchat (' + app.getVersion() + ').' }); }
 });
-autoUpdater.on('download-progress', (p) => { if (win) win.setProgressBar(p.percent / 100); });
+autoUpdater.on('download-progress', (p) => { if (win) win.setProgressBar(p.percent / 100); estadoForzado({ progreso: p.percent, texto: 'Descargando la actualización… ' + Math.round(p.percent) + '%' }); });
 autoUpdater.on('update-downloaded', async () => {
   if (win) win.setProgressBar(-1);
+  if (forzando) { estadoForzado({ progreso: 100, texto: 'Instalando… Creatuchat se reiniciará solo.' }); setTimeout(() => autoUpdater.quitAndInstall(false, true), 800); return; }
   const r = await msg({ message: 'La actualización está lista.', detail: 'Creatuchat se reiniciará para instalarla.', buttons: ['Reiniciar ahora', 'Al cerrar'], defaultId: 0, cancelId: 1 });
   if (r.response === 0) autoUpdater.quitAndInstall();
 });
 autoUpdater.on('error', (e) => {
   if (win) win.setProgressBar(-1);
+  if (forzando) estadoForzado({ error: true, texto: 'No se pudo actualizar: ' + ((e && e.message) || e) + '. Inténtalo de nuevo.' });
   if (manualCheck) { manualCheck = false; dialog.showErrorBox('No se pudo buscar actualizaciones', (e && e.message) || String(e)); }
 });
 // consulta GitHub Releases y devuelve la versión nueva ('' si no hay); se reutiliza el resultado durante 1 minuto
@@ -116,6 +122,73 @@ const buscarActualizaciones = (manual) => {
 
 // tras escanear el QR, el preload pide recargar WhatsApp para inyectar la librería con la sesión ya iniciada
 ipcMain.on('wa:reload', () => { if (win) win.webContents.reload(); });
+
+// ---------- registro de usuarios y actualización obligatoria ----------
+const MODAL_PRELOAD = path.join(__dirname, 'ventanas', 'modal-preload.js');
+const PLATAFORMA = process.platform === 'darwin' ? 'mac' : 'windows';
+const PRUEBA_MS = 15 * 86400000;
+const hoyISO = () => new Date().toISOString().slice(0, 10);
+// 'licencia' (vigente), 'prueba' (primeros 15 días) o 'ninguna' (versión gratuita: solo envío manual)
+const estadoLicencia = () => {
+  const l = store.wamLic || {};
+  if (l.token && l.valid && (!l.until || l.until >= hoyISO())) return 'licencia';
+  const t = store.wamTrial;
+  return !t || !Number(t.start) || Date.now() < Number(t.start) + PRUEBA_MS ? 'prueba' : 'ninguna';
+};
+const idInstalacion = () => {
+  if (!store.wamInstalacion) { store.wamInstalacion = crypto.randomUUID(); flushStore(); }
+  return store.wamInstalacion;
+};
+const enviarRegistro = (datos) => post('registro-creatuchat', { instalacion: idInstalacion(), ...datos, version: app.getVersion(), plataforma: PLATAFORMA, licencia: estadoLicencia() });
+
+let ventanaRegistro = null;
+let registroListo = null;
+ipcMain.handle('modal:info', () => ({ registro: store.wamRegistro || null, version: updateInfo.version || '', mac: MAC_SIN_FIRMA }));
+ipcMain.on('modal:salir', () => app.quit());
+ipcMain.handle('registro:enviar', async (_e, d) => {
+  const datos = { nombre: String((d && d.nombre) || '').trim(), correo: String((d && d.correo) || '').trim().toLowerCase(), numero: String((d && d.numero) || '').replace(/\D/g, '') };
+  const r = await enviarRegistro(datos);
+  if (r.error || !r.data) return { error: 'No se pudo conectar con el servidor. Revisa tu conexión a internet e inténtalo de nuevo.' };
+  if (r.status !== 200 || !r.data.ok) return { error: r.data.error || 'No se pudo guardar el registro (error ' + r.status + ').' };
+  store.wamRegistro = { ...datos, fecha: new Date().toISOString() };
+  flushStore();
+  const f = registroListo; registroListo = null;
+  if (f) f();
+  return { ok: true };
+});
+// pide nombre, correo y número de WhatsApp antes de abrir WhatsApp; sin registrarse no se puede usar la app
+const pedirRegistro = () => new Promise((resolve) => {
+  registroListo = () => { const v = ventanaRegistro; ventanaRegistro = null; if (v && !v.isDestroyed()) v.destroy(); resolve(); };
+  ventanaRegistro = new BrowserWindow({
+    width: 460, height: 600, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true, title: 'Creatuchat',
+    icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#111b21',
+    webPreferences: { preload: MODAL_PRELOAD, contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  ventanaRegistro.setMenu(null);
+  ventanaRegistro.on('closed', () => { if (registroListo) app.quit(); }); // cerrar sin registrarse = salir
+  ventanaRegistro.loadFile(path.join(__dirname, 'ventanas', 'registro.html'));
+});
+
+// quien usa la versión gratuita (sin licencia vigente) debe actualizar cuando hay una versión nueva; con licencia es opcional
+const exigirActualizacion = async () => {
+  if (forzando || SELFTEST || !win || estadoLicencia() === 'licencia') return;
+  const v = await consultarActualizacion();
+  if (!v || forzando || !win) return;
+  forzando = true;
+  try { await win.loadURL('about:blank'); } catch {} // se detiene el panel: no puede seguir trabajando sin actualizar
+  ventanaForzar = new BrowserWindow({
+    parent: win, modal: true, width: 440, height: 440, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true, title: 'Creatuchat',
+    icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#111b21',
+    webPreferences: { preload: MODAL_PRELOAD, contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  ventanaForzar.setMenu(null);
+  ventanaForzar.on('close', () => { if (forzando) app.quit(); }); // cerrar la ventana = salir
+  ventanaForzar.loadFile(path.join(__dirname, 'ventanas', 'actualizar.html'));
+};
+ipcMain.handle('forzar:actualizar', async () => {
+  if (MAC_SIN_FIRMA) { shell.openExternal('https://github.com/dirlant/creatuchat-desktop/releases/latest'); estadoForzado({ texto: 'Instala la versión nueva desde la descarga y vuelve a abrir Creatuchat.' }); return {}; }
+  try { await autoUpdater.downloadUpdate(); return {}; } catch (e) { return { error: 'No se pudo descargar: ' + ((e && e.message) || e) }; }
+});
 
 // mensajes del panel (mismos nombres que en la extensión)
 ipcMain.handle('bg:message', async (_e, m) => {
@@ -201,14 +274,25 @@ const crearVentana = () => {
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 if (!SELFTEST && !app.requestSingleInstanceLock()) app.quit();
 else {
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     loadStore();
     if (SELFTEST && process.argv.includes('--prueba-vencida')) store.wamTrial = { start: Date.now() - 20 * 86400000 }; // prueba de desarrollo: la prueba gratis ya terminó
+    app.on('before-quit', flushStore);
+    if (process.argv.includes('--probar-registro')) { // prueba de desarrollo: solo muestra el formulario de registro y lo captura
+      pedirRegistro();
+      await new Promise((r) => setTimeout(r, 2500));
+      if (OUT && ventanaRegistro) fs.writeFileSync(OUT + '.png', (await ventanaRegistro.webContents.capturePage()).toPNG());
+      return app.exit(0);
+    }
+    if (!SELFTEST && !store.wamRegistro) await pedirRegistro(); // sin registro no se abre la app
     crearMenu();
     crearVentana();
-    app.on('before-quit', flushStore);
     if (SELFTEST) return selftest();
+    if (store.wamRegistro) enviarRegistro(store.wamRegistro).catch(() => {}); // actualiza versión, estado de licencia y último uso
+    setInterval(() => { if (store.wamRegistro) enviarRegistro(store.wamRegistro).catch(() => {}); }, 12 * 3600000);
     consultarActualizacion(); // al abrir la app: se verifica enseguida (el panel vuelve a preguntar cada hora)
+    setTimeout(() => exigirActualizacion().catch(() => {}), 6000); // versión gratuita: actualización obligatoria
+    setInterval(() => exigirActualizacion().catch(() => {}), 30 * 60000);
   });
   app.on('window-all-closed', () => app.quit());
 }
