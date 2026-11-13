@@ -43,7 +43,8 @@
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "Creatuchat"
+      "shortcutName": "Creatuchat",
+      "artifactName": "Creatuchat-Setup-${version}.${ext}"
     },
     "publish": [
       {
