@@ -334,6 +334,7 @@ async function selftest() {
         diag.origenActivo = await wc.executeJavaScript(`document.querySelector('#wam-source button.on').dataset.src`);
         diag.pantallaLicencia = await wc.executeJavaScript(`!document.getElementById('wam-gate').hidden`);
       }
+      diag.plan = await wc.executeJavaScript(`(() => { const e = document.getElementById('wam-plan'); if (!e) return null; const r = e.getBoundingClientRect(); return { texto: e.textContent, clase: e.className, oculto: e.hidden, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
       diag.panelVisible = await wc.executeJavaScript(`(() => { const p = document.getElementById('wam-panel'); return !!p && !p.hidden; })()`);
       diag.licenciaVisible = await wc.executeJavaScript(`(() => { const g = document.getElementById('wam-gate'); return !!g && !g.hidden; })()`);
       const img = await wc.capturePage();

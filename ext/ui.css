@@ -236,3 +236,14 @@ details.wam-more>.wam-hint{margin:2px 0 4px}
 .wam-comu b{display:block;font-size:13.5px;color:var(--text)}
 .wam-comu a.wam-btn{flex:none;width:auto;margin:0;padding:7px 14px;text-decoration:none;font-size:13px}
 .wam-comu button{flex:none;border:0;background:none;color:var(--sub);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+
+/* plan activo (franja bajo la cabecera) */
+.wam-plan{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;width:100%;margin:0;padding:7px 14px;border:0;border-bottom:1px solid var(--line);background:var(--head);color:var(--text);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.wam-plan[hidden]{display:none}
+.wam-plan b{font-weight:700}
+.wam-plan span{color:var(--sub);font-size:12px}
+.wam-plan.lic{background:rgba(0,168,132,.14)}
+.wam-plan.lic b{color:var(--green)}
+.wam-plan.prueba{background:rgba(255,193,7,.16)}
+.wam-plan.bad{background:rgba(234,0,56,.12)}
+.wam-plan.bad b{color:var(--err)}

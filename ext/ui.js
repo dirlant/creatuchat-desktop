@@ -95,6 +95,7 @@
   root.innerHTML = `
   <div id="wam-panel" hidden>
     <div class="wam-head"><img id="wam-logo" class="wam-lt" alt=""><img id="wam-logo-d" class="wam-dk" alt=""><div class="wam-title" title="Envíos masivos"><img id="wam-word" class="wam-wd wam-lt" alt="Creatuchat"><img id="wam-word-d" class="wam-wd wam-dk" alt="Creatuchat"></div><button id="wam-bell" class="wam-bell" title="Avisos"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b id="wam-avibadge" class="wam-badge" hidden></b></button><button id="wam-dl" class="wam-aboutbtn wam-reflic" title="Actualizar: busca una versión nueva y revisa tu licencia y permisos">Actualizar</button><button id="wam-about" class="wam-aboutbtn" title="Estado y licencia">Acerca</button><button id="wam-close" title="Cerrar">×</button></div>
+    <button id="wam-plan" class="wam-plan" type="button" title="Tu plan actual: toca para ver o activar una licencia"><b id="wam-plan-nom"></b><span id="wam-plan-det"></span></button>
     <div id="wam-avibox" hidden>
       <div class="wam-avihead"><b>Avisos</b></div>
       <div class="wam-sum"><span id="wam-avinfo">Sin avisos.</span>
@@ -957,7 +958,26 @@
     if (!lic.token && pruebaTerminada()) return { texto: 'Solicitar licencia por WhatsApp', msg: 'Hola, mi prueba gratis de Creatuchat terminó y quiero solicitar una licencia.' + num };
     return { texto: 'Solicitar licencia por WhatsApp', msg: 'Hola, quiero solicitar una licencia de Creatuchat.' + num };
   };
+  // plan que está usando la persona ahora mismo (franja visible bajo la cabecera)
+  const planInfo = () => {
+    if (lic.token && lic.checking) return { cls: 'wait', nom: 'Verificando licencia…', det: '' };
+    if (lic.token && lic.valid) return { cls: 'lic', nom: 'Plan: Con licencia', det: 'hasta ' + lic.until + (lic.ia ? ' · IA incluida' : ' · sin IA') };
+    if (lic.token) return { cls: 'bad', nom: 'Licencia no válida', det: 'toca para ver el motivo' };
+    if (enPrueba() && prueba.start) return { cls: 'prueba', nom: 'Plan: Prueba gratis', det: pruebaDias() + (pruebaDias() === 1 ? ' día restante' : ' días restantes') + ' · todo menos IA' };
+    if (!prueba.start) return { cls: 'wait', nom: '', det: '' };
+    return { cls: 'free', nom: 'Plan: Gratuito', det: 'solo envío manual · toca para activar licencia' };
+  };
+  const renderPlan = () => {
+    const p = planInfo();
+    const el = $('#wam-plan');
+    el.hidden = !p.nom;
+    el.className = 'wam-plan ' + p.cls;
+    $('#wam-plan-nom').textContent = p.nom;
+    $('#wam-plan-det').textContent = p.det;
+  };
+  $('#wam-plan').onclick = () => { gateOpen = true; renderLic(); };
   const renderLic = () => {
+    renderPlan();
     const st = $('#wam-licstat');
     st.textContent = !lic.token ? (enPrueba() && prueba.start ? 'Prueba gratis: ' + pruebaDias() + (pruebaDias() === 1 ? ' día restante' : ' días restantes') : 'Versión gratuita') : lic.checking ? 'Verificando…' : lic.valid ? 'Licencia hasta ' + lic.until : 'Licencia no válida';
     st.className = lic.valid || !lic.token ? 'ok' : 'bad';
