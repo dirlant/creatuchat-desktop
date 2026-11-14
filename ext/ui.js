@@ -94,7 +94,7 @@
   root.id = 'wam-root';
   root.innerHTML = `
   <div id="wam-panel" hidden>
-    <div class="wam-head"><img id="wam-logo" class="wam-lt" alt=""><img id="wam-logo-d" class="wam-dk" alt=""><div class="wam-title" title="Envíos masivos"><img id="wam-word" class="wam-wd wam-lt" alt="Creatuchat"><img id="wam-word-d" class="wam-wd wam-dk" alt="Creatuchat"></div><button id="wam-bell" class="wam-bell" title="Avisos"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b id="wam-avibadge" class="wam-badge" hidden></b></button><button id="wam-dl" class="wam-aboutbtn wam-reflic" title="Actualizar: busca una versión nueva y revisa tu licencia y permisos">Actualizar</button><button id="wam-about" class="wam-aboutbtn" title="Estado y licencia">Acerca</button><button id="wam-close" title="Cerrar">×</button></div>
+    <div class="wam-head"><img id="wam-logo" class="wam-lt" alt=""><img id="wam-logo-d" class="wam-dk" alt=""><div class="wam-title" title="Envíos masivos"><img id="wam-word" class="wam-wd wam-lt" alt="Creatuchat"><img id="wam-word-d" class="wam-wd wam-dk" alt="Creatuchat"></div><button id="wam-share" class="wam-bell" title="Compartir Creatuchat" aria-label="Compartir"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg></button><button id="wam-bell" class="wam-bell" title="Avisos"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b id="wam-avibadge" class="wam-badge" hidden></b></button><button id="wam-dl" class="wam-aboutbtn wam-reflic" title="Actualizar: busca una versión nueva y revisa tu licencia y permisos">Actualizar</button><button id="wam-about" class="wam-aboutbtn" title="Estado y licencia">Acerca</button><button id="wam-close" title="Cerrar">×</button></div>
     <button id="wam-plan" class="wam-plan" type="button" title="Tu plan actual: toca para ver o activar una licencia"><b id="wam-plan-nom"></b><span id="wam-plan-det"></span></button>
     <div id="wam-avibox" hidden>
       <div class="wam-avihead"><b>Avisos</b></div>
@@ -102,13 +102,17 @@
         <span><a id="wam-avrefresh">Actualizar</a> · <a id="wam-avreadall">Marcar todos como leídos</a></span></div>
       <div id="wam-avlist"></div>
     </div>
+    <div id="wam-sharebox" hidden>
+      <b>Compartir Creatuchat</b>
+      <button id="wam-sharecopy" class="wam-btn">Copiar enlace</button>
+      <button id="wam-sharewa" class="wam-btn alt">Compartir por WhatsApp</button>
+    </div>
     <div id="wam-aboutbox" hidden>
       <div class="wam-aboutrow"><span>Conexión</span><span id="wam-conn">…</span></div>
       <div class="wam-aboutrow"><span>Licencia</span><span id="wam-licstat"></span></div>
       <div class="wam-aboutrow"><span>Número de WhatsApp</span><b id="wam-aboutnum">…</b></div>
       <div class="wam-aboutrow"><span>Versión</span><b id="wam-aboutver"></b></div>
       <div class="wam-aboutrow"><span>Comunidad</span><a href="https://chat.whatsapp.com/LoEpBGHQy82CgluRUQz7mP?s=sh&amp;p=a&amp;iam=2" target="_blank" rel="noopener noreferrer">Grupo de WhatsApp</a></div>
-      <div class="wam-aboutrow"><span>Compartir Creatuchat</span><span><a id="wam-sharecopy" href="#">Copiar enlace</a> · <a id="wam-sharewa" href="#">Por WhatsApp</a></span></div>
       <button id="wam-changelic" class="wam-btn alt">Cambiar licencia</button>
     </div>
 
@@ -393,10 +397,12 @@
     log('Actualizado: ' + msg, ok ? 'ok' : 'err');
     setStats(msg);
   };
-  $('#wam-about').onclick = () => { const b = $('#wam-aboutbox'); $('#wam-avibox').hidden = true; b.hidden = !b.hidden; };
+  $('#wam-share').onclick = () => { $('#wam-aboutbox').hidden = true; $('#wam-avibox').hidden = true; $('#wam-sharebox').hidden = !$('#wam-sharebox').hidden; };
+  $('#wam-about').onclick = () => { const b = $('#wam-aboutbox'); $('#wam-sharebox').hidden = true; $('#wam-avibox').hidden = true; b.hidden = !b.hidden; };
   $('#wam-bell').onclick = () => { if ($('#wam-avibox').hidden) abrirAvisos(); else $('#wam-avibox').hidden = true; };
   panel.addEventListener('click', (e) => {
     if (!e.target.closest('#wam-aboutbox, #wam-about')) $('#wam-aboutbox').hidden = true;
+    if (!e.target.closest('#wam-sharebox, #wam-share')) $('#wam-sharebox').hidden = true;
     if (!e.target.closest('#wam-avibox, #wam-bell, #wam-avbar')) $('#wam-avibox').hidden = true;
   });
   // dos secciones (Envío Automático / Envío con IA); la primera tiene pestañas internas: Envío, Mensajes y Métricas

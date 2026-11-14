@@ -247,3 +247,9 @@ details.wam-more>.wam-hint{margin:2px 0 4px}
 .wam-plan.prueba{background:rgba(255,193,7,.16)}
 .wam-plan.bad{background:rgba(234,0,56,.12)}
 .wam-plan.bad b{color:var(--err)}
+
+/* menú de compartir (botón de la cabecera) */
+#wam-sharebox{position:absolute;top:62px;right:12px;z-index:6;width:250px;padding:12px 14px;border-radius:12px;background:var(--card);color:var(--text);box-shadow:0 6px 24px #0006;border:1px solid var(--line)}
+#wam-sharebox[hidden]{display:none}
+#wam-sharebox b{display:block;margin-bottom:2px}
+#wam-sharebox .wam-btn{margin-top:8px}

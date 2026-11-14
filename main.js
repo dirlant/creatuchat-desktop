@@ -243,6 +243,7 @@ const crearMenu = () => {
         { label: 'Mostrar / ocultar panel', accelerator: 'CmdOrCtrl+Shift+P', click: toggle },
         { label: 'Buscar actualizaciones', click: () => buscarActualizaciones(true) },
         { label: 'Comunidad Creatuchat en WhatsApp', click: () => shell.openExternal('https://chat.whatsapp.com/LoEpBGHQy82CgluRUQz7mP?s=sh&p=a&iam=2') },
+        { label: 'Compartir Creatuchat', submenu: [{ label: 'Copiar enlace de descarga', click: copiarEnlace }, { label: 'Compartir por WhatsApp', click: compartirWhatsApp }] },
         { type: 'separator' },
         { label: 'Recargar WhatsApp', accelerator: 'CmdOrCtrl+R', click: () => win && win.webContents.reload() },
         { label: 'Herramientas de desarrollo', accelerator: 'F12', click: () => win && win.webContents.toggleDevTools() },
@@ -252,7 +253,6 @@ const crearMenu = () => {
     },
     { label: 'Edición', submenu: [{ role: 'undo', label: 'Deshacer' }, { role: 'redo', label: 'Rehacer' }, { type: 'separator' }, { role: 'cut', label: 'Cortar' }, { role: 'copy', label: 'Copiar' }, { role: 'paste', label: 'Pegar' }, { role: 'selectAll', label: 'Seleccionar todo' }] },
     { label: 'Ver', submenu: [{ role: 'resetZoom', label: 'Tamaño real' }, { role: 'zoomIn', label: 'Acercar' }, { role: 'zoomOut', label: 'Alejar' }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Pantalla completa' }] },
-    { label: 'Compartir', submenu: [{ label: 'Copiar enlace de descarga', click: copiarEnlace }, { label: 'Compartir por WhatsApp', click: compartirWhatsApp }] },
   ]));
 };
 
@@ -372,11 +372,20 @@ async function selftest() {
         diag.pantallaLicencia = await wc.executeJavaScript(`!document.getElementById('wam-gate').hidden`);
       }
       diag.plan = await wc.executeJavaScript(`(() => { const e = document.getElementById('wam-plan'); if (!e) return null; const r = e.getBoundingClientRect(); return { texto: e.textContent, clase: e.className, oculto: e.hidden, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
-      diag.menu = Menu.getApplicationMenu().items.map((m) => m.label + ': ' + m.submenu.items.filter((i) => i.type !== 'separator').map((i) => i.label).join(' | '));
+      diag.menu = Menu.getApplicationMenu().items.map((m) => m.label + ': ' + m.submenu.items.filter((i) => i.type !== 'separator').map((i) => i.label + (i.submenu ? ' [' + i.submenu.items.map((x) => x.label).join(' | ') + ']' : '')).join(' | '));
       if (process.argv.includes('--probar-compartir')) {
         await clipboard.writeText('');
-        Menu.getApplicationMenu().items.find((m) => m.label === 'Compartir').submenu.items[0].click();
+        Menu.getApplicationMenu().items[0].submenu.items.find((i) => i.label === 'Compartir Creatuchat').submenu.items[0].click();
         diag.portapapeles = await clipboard.readText();
+      }
+      if (process.argv.includes('--probar-compartir')) {
+        diag.cabecera = await wc.executeJavaScript(`(() => { const r = (id) => { const e = document.getElementById(id); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]; }; const p = document.getElementById('wam-panel').getBoundingClientRect(); return { panel: [Math.round(p.x), Math.round(p.width)], share: r('wam-share'), bell: r('wam-bell'), dl: r('wam-dl'), about: r('wam-about'), close: r('wam-close') }; })()`);
+        await wc.executeJavaScript(`document.getElementById('wam-share').click()`);
+        diag.compartirAbierto = await wc.executeJavaScript(`(() => { const e = document.getElementById('wam-sharebox'); const b = e.getBoundingClientRect(); return { oculto: e.hidden, x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; })()`);
+        await wc.executeJavaScript(`document.getElementById('wam-sharecopy').click()`);
+        await new Promise((r) => setTimeout(r, 500));
+        diag.portapapelesPanel = await clipboard.readText();
+        diag.textoBoton = await wc.executeJavaScript(`document.getElementById('wam-sharecopy').textContent`);
       }
       diag.panelVisible = await wc.executeJavaScript(`(() => { const p = document.getElementById('wam-panel'); return !!p && !p.hidden; })()`);
       diag.licenciaVisible = await wc.executeJavaScript(`(() => { const g = document.getElementById('wam-gate'); return !!g && !g.hidden; })()`);
