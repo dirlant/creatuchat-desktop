@@ -145,11 +145,32 @@ let ventanaRegistro = null;
 let registroListo = null;
 ipcMain.handle('modal:info', () => ({ registro: store.wamRegistro || null, version: updateInfo.version || '', mac: MAC_SIN_FIRMA }));
 ipcMain.on('modal:salir', () => app.quit());
+const MOTIVOS_LIC = { token_no_encontrado: 'No encontramos esa licencia. Revisa el código.', numero_no_coincide: 'Esa licencia no está registrada para ese número de WhatsApp.', licencia_vencida: 'Esa licencia está vencida. Pide la renovación por WhatsApp.' };
+const SOPORTE_TEL = '584122837925';
+ipcMain.handle('registro:soporte', (_e, d) => {
+  const quien = d && d.nombre ? ' Soy ' + String(d.nombre).slice(0, 60) + '.' : '';
+  const num = d && d.numero ? ' Mi número de WhatsApp: +' + String(d.numero).replace(/\D/g, '') + '.' : '';
+  shell.openExternal('https://wa.me/' + SOPORTE_TEL + '?text=' + encodeURIComponent('Hola, quiero solicitar una licencia de Creatuchat.' + quien + num));
+});
 ipcMain.handle('registro:enviar', async (_e, d) => {
   const datos = { nombre: String((d && d.nombre) || '').trim(), correo: String((d && d.correo) || '').trim().toLowerCase(), numero: String((d && d.numero) || '').replace(/\D/g, '') };
+  const token = String((d && d.token) || '').trim();
+  let lic = null; // con «Tengo licencia»: se valida antes de entrar y la app arranca ya con la licencia activa
+  if (token) {
+    const v = await post('licencia-whatsapp', { token, numero: datos.numero });
+    if (v.error || !v.data) return { error: 'No se pudo verificar la licencia. Revisa tu conexión a internet e inténtalo de nuevo.' };
+    if (v.status === 400) return { error: 'Escribe el código de tu licencia y tu número de WhatsApp.' };
+    if (v.status !== 200 || !v.data.valida) return { error: MOTIVOS_LIC[v.data.motivo] || 'La licencia no es válida.' };
+    lic = { token, valid: true, ia: v.data.ia === true, until: v.data.fecha_vencimiento || '', number: datos.numero, checkedAt: Date.now() };
+  }
+  const licPrevia = store.wamLic;
+  if (lic) store.wamLic = lic; // así el registro ya reporta el estado «licencia»
   const r = await enviarRegistro(datos);
-  if (r.error || !r.data) return { error: 'No se pudo conectar con el servidor. Revisa tu conexión a internet e inténtalo de nuevo.' };
-  if (r.status !== 200 || !r.data.ok) return { error: r.data.error || 'No se pudo guardar el registro (error ' + r.status + ').' };
+  if (r.error || !r.data || r.status !== 200 || !r.data.ok) {
+    if (lic) store.wamLic = licPrevia;
+    if (r.error || !r.data) return { error: 'No se pudo conectar con el servidor. Revisa tu conexión a internet e inténtalo de nuevo.' };
+    return { error: r.data.error || 'No se pudo guardar el registro (error ' + r.status + ').' };
+  }
   store.wamRegistro = { ...datos, fecha: new Date().toISOString() };
   flushStore();
   const f = registroListo; registroListo = null;
@@ -160,7 +181,7 @@ ipcMain.handle('registro:enviar', async (_e, d) => {
 const pedirRegistro = () => new Promise((resolve) => {
   registroListo = () => { const v = ventanaRegistro; ventanaRegistro = null; if (v && !v.isDestroyed()) v.destroy(); resolve(); };
   ventanaRegistro = new BrowserWindow({
-    width: 460, height: 600, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true, title: 'Creatuchat',
+    width: 460, height: 740, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true, title: 'Creatuchat',
     icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#111b21',
     webPreferences: { preload: MODAL_PRELOAD, contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
@@ -281,6 +302,12 @@ else {
     if (process.argv.includes('--probar-registro')) { // prueba de desarrollo: solo muestra el formulario de registro y lo captura
       pedirRegistro();
       await new Promise((r) => setTimeout(r, 2500));
+      if (process.argv.includes('--con-licencia') && ventanaRegistro) { // además prueba «Tengo licencia» con un código falso: debe rechazarlo
+        const wc = ventanaRegistro.webContents;
+        await wc.executeJavaScript(`document.getElementById('nombre').value='Prueba';document.getElementById('correo').value='prueba@example.com';document.getElementById('numero').value='584120000000';document.getElementById('tl').click();document.getElementById('token').value='codigo-falso';document.getElementById('f').requestSubmit();`);
+        await new Promise((r) => setTimeout(r, 4000));
+        console.log('ERR_FORM=' + await wc.executeJavaScript(`document.getElementById('err').textContent`));
+      }
       if (OUT && ventanaRegistro) fs.writeFileSync(OUT + '.png', (await ventanaRegistro.webContents.capturePage()).toPNG());
       return app.exit(0);
     }

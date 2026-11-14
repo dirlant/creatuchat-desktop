@@ -16,6 +16,9 @@
   label{display:block;margin:10px 0 4px;font-weight:600;font-size:13px}
   input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit}
   input:focus{outline:2px solid var(--green);border-color:transparent}
+  .links{display:flex;justify-content:space-between;gap:10px;margin-top:12px}
+  button.link{width:auto;margin:0;padding:2px 0;background:none;border:0;color:var(--green);font-weight:600;font-size:13px;text-decoration:underline}
+  #lic{margin-top:6px}
   small{display:block;margin-top:3px;color:var(--sub);font-size:12px}
   button{width:100%;margin-top:16px;padding:12px;border:0;border-radius:12px;background:var(--green);color:#fff;font:inherit;font-weight:600;cursor:pointer}
   button:disabled{opacity:.6;cursor:default}
@@ -36,6 +39,15 @@
     <label for="numero">Número de WhatsApp que vas a usar</label>
     <input id="numero" inputmode="tel" autocomplete="tel" placeholder="Ej: 584121234567">
     <small>Con el código de país, sin «+» ni espacios.</small>
+    <div class="links">
+      <button id="tl" class="link" type="button">Tengo licencia</button>
+      <button id="sl" class="link" type="button">Solicitar licencia</button>
+    </div>
+    <div id="lic" hidden>
+      <label for="token">Código de tu licencia</label>
+      <input id="token" autocomplete="off" placeholder="Pega aquí tu código">
+      <small>Se valida con el número de WhatsApp que escribiste arriba.</small>
+    </div>
     <button id="ok" type="submit">Continuar</button>
     <div id="err" role="alert"></div>
   </form>
@@ -45,6 +57,10 @@
   const $ = (id) => document.getElementById(id);
   ct.info().then((i) => { if (i && i.registro) { $('nombre').value = i.registro.nombre || ''; $('correo').value = i.registro.correo || ''; $('numero').value = i.registro.numero || ''; } });
   $('nombre').focus();
+  const datos = () => ({ nombre: $('nombre').value.trim(), correo: $('correo').value.trim(), numero: $('numero').value.replace(/\D/g, '') });
+  const pintarBoton = () => { $('ok').textContent = !$('lic').hidden ? 'Entrar con mi licencia' : 'Continuar'; $('tl').textContent = !$('lic').hidden ? 'No tengo licencia' : 'Tengo licencia'; };
+  $('tl').onclick = () => { $('lic').hidden = !$('lic').hidden; if (!$('lic').hidden) $('token').focus(); else $('token').value = ''; $('err').textContent = ''; pintarBoton(); };
+  $('sl').onclick = () => ct.soporte(datos());
   $('f').addEventListener('submit', async (e) => {
     e.preventDefault();
     const nombre = $('nombre').value.trim(), correo = $('correo').value.trim(), numero = $('numero').value.replace(/\D/g, '');
@@ -52,10 +68,12 @@
     if (nombre.length < 2) return err('Escribe tu nombre.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) return err('Escribe un correo válido.');
     if (numero.length < 8 || numero.length > 15) return err('Escribe tu número de WhatsApp con el código de país (8 a 15 dígitos).');
-    err(''); $('ok').disabled = true; $('ok').textContent = 'Guardando…';
-    const r = await ct.registrar({ nombre, correo, numero });
+    const token = $('lic').hidden ? '' : $('token').value.trim();
+    if (!$('lic').hidden && !token) return err('Escribe el código de tu licencia o pulsa «No tengo licencia».');
+    err(''); $('ok').disabled = true; $('ok').textContent = token ? 'Validando licencia…' : 'Guardando…';
+    const r = await ct.registrar({ nombre, correo, numero, token });
     if (r && r.ok) return; // el proceso principal cierra esta ventana y abre WhatsApp
-    $('ok').disabled = false; $('ok').textContent = 'Continuar';
+    $('ok').disabled = false; pintarBoton();
     err((r && r.error) || 'No se pudo guardar. Revisa tu conexión a internet e inténtalo de nuevo.');
   });
 </script>

@@ -960,7 +960,7 @@
   };
   // plan que está usando la persona ahora mismo (franja visible bajo la cabecera)
   const planInfo = () => {
-    if (lic.token && lic.checking) return { cls: 'wait', nom: 'Verificando licencia…', det: '' };
+    if (lic.token && (lic.checking || (!lic.valid && lic.reason === 'Verificando licencia…'))) return { cls: 'wait', nom: 'Verificando licencia…', det: '' };
     if (lic.token && lic.valid) return { cls: 'lic', nom: 'Plan: Con licencia', det: 'hasta ' + lic.until + (lic.ia ? ' · IA incluida' : ' · sin IA') };
     if (lic.token) return { cls: 'bad', nom: 'Licencia no válida', det: 'toca para ver el motivo' };
     if (enPrueba() && prueba.start) return { cls: 'prueba', nom: 'Plan: Prueba gratis', det: pruebaDias() + (pruebaDias() === 1 ? ' día restante' : ' días restantes') + ' · todo menos IA' };
