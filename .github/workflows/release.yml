@@ -1,5 +1,7 @@
 # Al subir una etiqueta de versión (por ejemplo v0.1.7) se compilan los instaladores de Windows y de Mac
 # y se publican en el Release de GitHub, junto con los archivos que usa la actualización automática.
+# El Release se crea como BORRADOR y solo se publica cuando Windows y Mac terminaron de subir sus archivos:
+# así la app nunca ve una versión nueva sin su latest.yml (daba «Cannot find latest.yml» durante la compilación).
 # También se puede lanzar a mano (Actions > Publicar versión > Run workflow) indicando una etiqueta existente.
 name: Publicar versión
 
@@ -27,7 +29,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Creatuchat ${TAG#v}" --notes "Instaladores de Windows y Mac. La app se actualiza sola desde el botón Actualizar."
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Creatuchat ${TAG#v}" --notes "Instaladores de Windows y Mac. La app se actualiza sola desde el botón Actualizar."
 
   instaladores:
     needs: release
@@ -62,3 +64,15 @@ jobs:
           archivos=(dist/*.exe dist/*.dmg dist/*.zip dist/*.blockmap dist/latest*.yml)
           echo "Subiendo ${#archivos[@]} archivos"
           gh release upload "$TAG" "${archivos[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+  publicar:
+    needs: instaladores
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publicar el Release (ya tiene todos los archivos)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
