@@ -1,6 +1,6 @@
 // Creatuchat (escritorio): abre WhatsApp Web en su propia ventana, con el mismo panel de la extensión de Chrome.
 // Este proceso hace lo que en la extensión hacía el service worker: guarda los datos, llama a la API y se actualiza.
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, net } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, net, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -220,11 +220,20 @@ ipcMain.handle('bg:message', async (_e, m) => {
     case 'wam-update': return { status: 200, version: await consultarActualizacion() };
     case 'wam-badge': try { app.setBadgeCount(Math.min(m.count || 0, 99)); } catch {} return;
     case 'wam-open-sync': buscarActualizaciones(true); return;
+    case 'wam-share': if (m.accion === 'whatsapp') compartirWhatsApp(); else { clipboard.writeText(LINK_COMPARTIR); } return { link: LINK_COMPARTIR };
     default: return;
   }
 });
 
 // ---------- ventana ----------
+// compartir Creatuchat: el enlace lleva a la página de descarga
+const LINK_COMPARTIR = 'https://creatuchat.vercel.app';
+const TEXTO_COMPARTIR = 'Te recomiendo Creatuchat: envíos masivos y respuestas automáticas en WhatsApp. Descárgalo aquí: ' + LINK_COMPARTIR;
+const copiarEnlace = () => {
+  clipboard.writeText(LINK_COMPARTIR);
+  return msg({ message: 'Enlace copiado al portapapeles.', detail: LINK_COMPARTIR + '\n\nPégalo en un chat, correo o red social para compartir Creatuchat.' });
+};
+const compartirWhatsApp = () => shell.openExternal('https://wa.me/?text=' + encodeURIComponent(TEXTO_COMPARTIR));
 const crearMenu = () => {
   const toggle = () => win && win.webContents.send('toggle-panel');
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -241,8 +250,9 @@ const crearMenu = () => {
         { role: 'quit', label: 'Salir' },
       ],
     },
-    { label: 'Edición', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-    { label: 'Ver', submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'Edición', submenu: [{ role: 'undo', label: 'Deshacer' }, { role: 'redo', label: 'Rehacer' }, { type: 'separator' }, { role: 'cut', label: 'Cortar' }, { role: 'copy', label: 'Copiar' }, { role: 'paste', label: 'Pegar' }, { role: 'selectAll', label: 'Seleccionar todo' }] },
+    { label: 'Ver', submenu: [{ role: 'resetZoom', label: 'Tamaño real' }, { role: 'zoomIn', label: 'Acercar' }, { role: 'zoomOut', label: 'Alejar' }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Pantalla completa' }] },
+    { label: 'Compartir', submenu: [{ label: 'Copiar enlace de descarga', click: copiarEnlace }, { label: 'Compartir por WhatsApp', click: compartirWhatsApp }] },
   ]));
 };
 
@@ -362,6 +372,12 @@ async function selftest() {
         diag.pantallaLicencia = await wc.executeJavaScript(`!document.getElementById('wam-gate').hidden`);
       }
       diag.plan = await wc.executeJavaScript(`(() => { const e = document.getElementById('wam-plan'); if (!e) return null; const r = e.getBoundingClientRect(); return { texto: e.textContent, clase: e.className, oculto: e.hidden, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
+      diag.menu = Menu.getApplicationMenu().items.map((m) => m.label + ': ' + m.submenu.items.filter((i) => i.type !== 'separator').map((i) => i.label).join(' | '));
+      if (process.argv.includes('--probar-compartir')) {
+        await clipboard.writeText('');
+        Menu.getApplicationMenu().items.find((m) => m.label === 'Compartir').submenu.items[0].click();
+        diag.portapapeles = await clipboard.readText();
+      }
       diag.panelVisible = await wc.executeJavaScript(`(() => { const p = document.getElementById('wam-panel'); return !!p && !p.hidden; })()`);
       diag.licenciaVisible = await wc.executeJavaScript(`(() => { const g = document.getElementById('wam-gate'); return !!g && !g.hidden; })()`);
       const img = await wc.capturePage();

@@ -108,6 +108,7 @@
       <div class="wam-aboutrow"><span>Número de WhatsApp</span><b id="wam-aboutnum">…</b></div>
       <div class="wam-aboutrow"><span>Versión</span><b id="wam-aboutver"></b></div>
       <div class="wam-aboutrow"><span>Comunidad</span><a href="https://chat.whatsapp.com/LoEpBGHQy82CgluRUQz7mP?s=sh&amp;p=a&amp;iam=2" target="_blank" rel="noopener noreferrer">Grupo de WhatsApp</a></div>
+      <div class="wam-aboutrow"><span>Compartir Creatuchat</span><span><a id="wam-sharecopy" href="#">Copiar enlace</a> · <a id="wam-sharewa" href="#">Por WhatsApp</a></span></div>
       <button id="wam-changelic" class="wam-btn alt">Cambiar licencia</button>
     </div>
 
@@ -1009,6 +1010,14 @@
     }
   };
   $('#wam-licstat').onclick = () => { gateOpen = true; renderLic(); };
+  // compartir: copia el enlace de descarga al portapapeles (o abre WhatsApp con el mensaje listo)
+  const compartir = (accion) => (e) => {
+    e.preventDefault();
+    try { chrome.runtime.sendMessage({ type: 'wam-share', accion }, () => {}); } catch {}
+    if (accion !== 'whatsapp') { const a = e.target; const t = a.textContent; a.textContent = '¡Enlace copiado!'; setTimeout(() => { a.textContent = t; }, 2000); log('Enlace de descarga copiado al portapapeles', 'ok'); }
+  };
+  $('#wam-sharecopy').onclick = compartir('copiar');
+  $('#wam-sharewa').onclick = compartir('whatsapp');
   $('#wam-changelic').onclick = () => { $('#wam-aboutbox').hidden = true; $('#wam-avibox').hidden = true; gateOpen = true; renderLic(); };
   $('#wam-gate-close').onclick = () => { gateOpen = false; renderLic(); };
 

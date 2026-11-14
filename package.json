@@ -1,7 +1,7 @@
 {
   "name": "creatuchat-desktop",
   "productName": "Creatuchat",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Creatuchat: WhatsApp Web con envíos automáticos y asistente con IA, como aplicación de escritorio.",
   "main": "main.js",
   "author": "Creatuchat",
