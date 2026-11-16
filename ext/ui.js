@@ -68,6 +68,7 @@
     maxErrors: 5,
     auto: true,
     warmup: true,
+    skip72: false,
     hoursOn: true,
     hourFrom: 8,
     hourTo: 20,
@@ -194,6 +195,9 @@
         <div id="wam-rlist" class="wam-list small"></div>
       </div>
 
+      <div class="wam-card">
+        <label class="wam-sw"><span>Limitar conversaciones de 72 horas<small>Salta a quien ya tenga una conversación con mensajes en las últimas 72 horas.</small></span><input type="checkbox" id="skip72"><i></i></label>
+      </div>
       <h4>Velocidad</h4>
       <div class="wam-card">
         <div class="wam-seg" id="wam-presets">
@@ -446,7 +450,7 @@
 
   // ---------- campos de configuración ----------
   const numFields = ['minDelay', 'maxDelay', 'batchMin', 'batchMax', 'pauseMin', 'pauseMax', 'dailyLimit', 'maxErrors', 'hourFrom', 'hourTo'];
-  const boolFields = ['auto', 'typing', 'jitter', 'warmup', 'hoursOn'];
+  const boolFields = ['auto', 'typing', 'jitter', 'warmup', 'hoursOn', 'skip72'];
   const syncFields = () => {
     numFields.forEach((k) => ($('#' + k).value = cfg[k]));
     boolFields.forEach((k) => ($('#' + k).checked = cfg[k]));
@@ -1417,12 +1421,22 @@
           if (!ex) throw new Error('No tiene WhatsApp');
           to = ex.id;
         }
+        if (cfg.skip72) {
+          let lt = 0;
+          try { lt = (await call('lastMsgTime', { id: to })).t || 0; } catch {}
+          if (lt && Date.now() / 1000 - lt < 72 * 3600) { const oe = new Error('conversación con mensajes en las últimas 72 h'); oe.omitir = true; throw oe; }
+        }
         setStats(`Enviando a ${who}…`);
         await call('send', { to, text, typingMs: typingMs(text) });
         run.sent++; sinceBreak++; consecErr = 0;
         record({ ok: true, id: r.id, name: r.name, m: msgIdx });
         log(`✓ ${who}`, 'ok');
       } catch (e) {
+        if (e.omitir) { // se salta sin contar como envío ni como fallo, y sin esperar el intervalo
+          log(`↷ ${who}: omitido (${e.message})`);
+          processed++; job.sent = run.sent; job.failed = run.failed; persistJob(); setStats();
+          continue;
+        }
         run.failed++; consecErr++;
         record({ ok: false, id: r.id, name: r.name, err: e.message });
         log(`✗ ${who}: ${e.message}`, 'err');

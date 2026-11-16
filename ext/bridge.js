@@ -80,6 +80,18 @@
       return out;
     },
 
+    // Hora (segundos) del último mensaje de la conversación, o 0 si no hay conversación previa. Solo lee, no marca nada como leído.
+    async lastMsgTime({ id }) {
+      let t = 0;
+      try { const c = WPP.whatsapp.ChatStore.get(id); if (c && c.t) t = Number(c.t) || 0; } catch {}
+      try {
+        const msgs = await WPP.chat.getMessages(id, { count: 1 });
+        const m = msgs && msgs[msgs.length - 1];
+        if (m && m.t) t = Math.max(t, Number(m.t) || 0);
+      } catch {}
+      return { t };
+    },
+
     async checkNumber({ phone }) {
       const r = await WPP.contact.queryExists(phone);
       return r ? { id: toId(r.wid) } : null;
