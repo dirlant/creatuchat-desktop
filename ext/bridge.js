@@ -52,11 +52,32 @@
     // Chats (individuales y grupos) que tienen una etiqueta
     async chatsByLabel({ labelId }) {
       const chats = await WPP.chat.list({ withLabels: [String(labelId)] });
-      return chats.map((c) => ({
+      const out = chats.map((c) => ({
         id: toId(c.id),
         name: c.name || c.formattedTitle || c.contact?.pushname || toId(c.id).split('@')[0],
         isGroup: !!c.isGroup,
       }));
+      // chat.list solo ve los chats que WhatsApp ya cargó en memoria; las asociaciones etiqueta→chat vienen completas
+      // en labelItemCollection, así que se suman los chats que faltan (sin duplicar).
+      try {
+        const vistos = new Set(out.map((x) => x.id));
+        const lb = WPP.whatsapp.LabelStore.get(String(labelId));
+        const items = (lb && lb.labelItemCollection && lb.labelItemCollection.getModelsArray && lb.labelItemCollection.getModelsArray()) || [];
+        for (const it of items) {
+          if (it.parentType !== 'Chat' || !it.parentId) continue;
+          const id = toId(it.parentId);
+          if (!id || vistos.has(id)) continue;
+          vistos.add(id);
+          let ct = null;
+          try { ct = WPP.whatsapp.ContactStore.get(it.parentId); } catch {}
+          out.push({
+            id,
+            name: (ct && (ct.name || ct.formattedName || ct.pushname)) || id.split('@')[0],
+            isGroup: /@g\.us$/.test(id),
+          });
+        }
+      } catch {}
+      return out;
     },
 
     async checkNumber({ phone }) {
