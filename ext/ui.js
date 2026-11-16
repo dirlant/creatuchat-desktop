@@ -117,6 +117,26 @@
       <button id="wam-changelic" class="wam-btn alt">Cambiar licencia</button>
     </div>
 
+    <div id="wam-reco" hidden>
+      <div class="wam-card">
+        <b>Recomendaciones de envío</b>
+        <p class="wam-hint">Creatuchat no te limita: tú decides cuánto y cuándo enviar. Estas pautas reducen el riesgo de que WhatsApp bloquee tu número.</p>
+        <ul class="wam-hint" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+          <li><b>Calienta el número:</b> si es nuevo o casi no envía, empieza con unos 30 mensajes al día y sube de a poco (60, 100, 150).</li>
+          <li><b>Pocos al día:</b> evita ráfagas grandes. Menos de 150–200 mensajes diarios es lo más seguro.</li>
+          <li><b>Deja los tiempos aleatorios:</b> las pausas y los intervalos variables parecen más humanos que un ritmo fijo.</li>
+          <li><b>Horario de día:</b> envía entre las 8:00 y las 20:00, no de madrugada.</li>
+          <li><b>Escribe a quien te conoce:</b> contactos que te guardaron o que te escribieron antes. Los desconocidos reportan más.</li>
+          <li><b>Varía el mensaje:</b> usa varios textos y variables como {nombre}; el mismo texto a todos es la señal más clara de spam.</li>
+          <li><b>Respeta las bajas:</b> si alguien pide no recibir más, no le escribas otra vez.</li>
+          <li><b>Evita las conversaciones recientes:</b> activa «Limitar conversaciones de 72 horas» para no repetir a quien ya habló contigo.</li>
+          <li><b>Si empiezan los errores o bloqueos:</b> para y retoma otro día con menos volumen.</li>
+        </ul>
+        <p class="wam-hint">El uso de WhatsApp para envíos masivos va contra sus términos y siempre existe riesgo de bloqueo, aunque sigas estas pautas.</p>
+        <button id="wam-reco-close" class="wam-btn">Entendido</button>
+      </div>
+    </div>
+
     <div id="wam-gate">
       <div class="wam-card">
         <img id="wam-biglogo" alt="Creatuchat">
@@ -197,6 +217,7 @@
 
       <div class="wam-card">
         <label class="wam-sw"><span>Limitar conversaciones de 72 horas<small>Salta a quien ya tenga una conversación con mensajes en las últimas 72 horas.</small></span><input type="checkbox" id="skip72"><i></i></label>
+        <a id="wam-reco-open" class="wam-hint" href="#" style="display:block;margin-top:8px">Ver recomendaciones de envío</a>
       </div>
       <h4>Velocidad</h4>
       <div class="wam-card">
@@ -206,15 +227,15 @@
         <label class="wam-sw"><span>Tiempos aleatorios seguros</span><input type="checkbox" id="auto"><i></i></label>
         <label class="wam-sw"><span>Simular "escribiendo…"</span><input type="checkbox" id="typing"><i></i></label>
         <label class="wam-sw"><span>Variación humana</span><input type="checkbox" id="jitter"><i></i></label>
-        <label class="wam-sw"><span>Calentamiento gradual (modo seguro)</span><input type="checkbox" id="warmup"><i></i></label>
-        <label class="wam-sw"><span>Solo en horario (modo seguro)</span><input type="checkbox" id="hoursOn"><i></i></label>
+        <label class="wam-sw"><span>Calentamiento gradual<small>Recomendación: solo avisa, no bloquea.</small></span><input type="checkbox" id="warmup"><i></i></label>
+        <label class="wam-sw"><span>Horario recomendado<small>Solo avisa si envías fuera de horario.</small></span><input type="checkbox" id="hoursOn"><i></i></label>
         <details>
           <summary>Ajustes avanzados</summary>
           <label>Intervalo (seg) <span><input type="number" id="minDelay" min="1"> – <input type="number" id="maxDelay" min="1"></span></label>
           <label>Pausa cada (mensajes) <span><input type="number" id="batchMin" min="1"> – <input type="number" id="batchMax" min="1"></span></label>
           <label>Duración pausa (min) <span><input type="number" id="pauseMin" min="1"> – <input type="number" id="pauseMax" min="1"></span></label>
           <label>Horario permitido (hora) <span><input type="number" id="hourFrom" min="0" max="23"> – <input type="number" id="hourTo" min="1" max="24"></span></label>
-          <label>Límite diario <span><input type="number" id="dailyLimit" min="1"></span></label>
+          <label>Límite diario recomendado <span><input type="number" id="dailyLimit" min="1"></span></label>
           <label>Parar tras errores seguidos <span><input type="number" id="maxErrors" min="1"></span></label>
         </details>
       </div>
@@ -1030,6 +1051,8 @@
   $('#wam-sharewa').onclick = compartir('whatsapp');
   $('#wam-changelic').onclick = () => { $('#wam-aboutbox').hidden = true; $('#wam-avibox').hidden = true; gateOpen = true; renderLic(); };
   $('#wam-gate-close').onclick = () => { gateOpen = false; renderLic(); };
+  $('#wam-reco-open').onclick = (e) => { e.preventDefault(); $('#wam-reco').hidden = false; };
+  $('#wam-reco-close').onclick = () => { $('#wam-reco').hidden = true; };
 
   const fetchLicense = (token, numero) =>
     new Promise((resolve) => chrome.runtime.sendMessage({ type: 'wam-license', token, numero }, (r) => resolve(r || { error: chrome.runtime.lastError?.message || 'sin respuesta' })));
@@ -1263,7 +1286,7 @@
     return true;
   };
   const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
-  const SAFE_MIN = 8; // segundos: nunca menos de esto en modo seguro
+  const SAFE_MIN = 1; // segundos: se respeta el intervalo que elija la persona (el riesgo de intervalos cortos solo se advierte)
   const nextDelay = () => {
     if (cfg.auto) {
       // distribución log-normal alrededor del punto medio del rango (como un humano: muchos tiempos
@@ -1357,13 +1380,16 @@
       }
     }
     try { if (!(await call('status')).ready) throw 0; } catch { return log('WhatsApp aún no está listo', 'err'); }
+    // Solo avisos: la decisión de enviar es de la persona, aunque supere lo recomendado
     const allowed = dailyAllowance();
-    const remaining = allowed - sentToday();
-    if (remaining <= 0) return log(`Límite diario alcanzado: ${sentToday()} de ${allowed} enviados hoy. Continúa mañana.`, 'err');
-    const warm = cfg.auto && cfg.warmup && allowed < cfg.dailyLimit ? ` (calentamiento: hoy máximo ${allowed})` : '';
     const pending = resume === true ? job.queue.length : recipients.length;
-    const que = 'mensajes';
-    if (!confirm(`${resume === true ? 'Se reanudará el envío' : 'Se enviarán'}: hasta ${Math.min(pending, remaining)} ${que} hoy${warm}, con las pausas de seguridad. ¿Continuar?`)) return;
+    const avisos = [];
+    if (sentToday() + pending > allowed) avisos.push(`• Hoy se recomienda enviar hasta ${allowed} mensajes (ya llevas ${sentToday()}) y este envío tiene ${pending}. Superarlo aumenta el riesgo de que WhatsApp bloquee tu número.`);
+    if (hoursActive() && !inWindow()) avisos.push(`• Estás fuera del horario recomendado (${cfg.hourFrom}:00–${cfg.hourTo}:00).`);
+    if (cfg.minDelay < 8) avisos.push('• Intervalo mínimo de ' + cfg.minDelay + ' s: menos de 8 s entre mensajes es muy rápido y arriesgado.');
+    if (!cfg.auto) avisos.push('• Tiempos aleatorios apagados: los envíos a intervalos fijos son más fáciles de detectar.');
+    if (!confirm(`${resume === true ? 'Se reanudará el envío' : 'Se enviarán'} a ${pending} contactos.` +
+      (avisos.length ? `\n\nAdvertencias (no se bloquea nada, tú decides):\n${avisos.join('\n')}\n\nVer «Recomendaciones de envío» en la pestaña Envío.` : '') + '\n\n¿Continuar?')) return;
     if (resume !== true && job && job.queue.length && !confirm('Hay un envío pendiente sin terminar. Iniciar uno nuevo lo descartará. ¿Continuar?')) return;
 
     let queue;
@@ -1380,7 +1406,7 @@
     renderIaRun(); // la IA queda bloqueada mientras dure el envío masivo
     persistJob(); renderResume();
     let nextPauseAt = rndInt(cfg.batchMin, cfg.batchMax);
-    let sinceBreak = 0, consecErr = 0, lastLic = Date.now();
+    let sinceBreak = 0, consecErr = 0, lastLic = Date.now(), avisoLimite = false, avisoHorario = false;
     log('Envío iniciado');
 
     for (let i = 0; i < queue.length; i++) {
@@ -1389,13 +1415,8 @@
         lastLic = Date.now();
         if (!enPrueba() && !(await checkLicense())) { log('Envío detenido: ' + (lic.reason || 'licencia no válida'), 'err'); break; }
       }
-      if (sentToday() >= dailyAllowance()) { log(`Límite diario alcanzado (${sentToday()} hoy). Continúa mañana.`, 'err'); break; }
-      if (hoursActive() && !inWindow()) {
-        const sec = secondsToWindow();
-        log(`Fuera del horario (${cfg.hourFrom}:00–${cfg.hourTo}:00). Se reanuda en ${fmt(sec)}`);
-        if (!(await wait(sec, 'Fuera de horario, reanuda en'))) break;
-        sinceBreak = 0;
-      }
+      if (!avisoLimite && sentToday() >= dailyAllowance()) { avisoLimite = true; log(`Aviso: ya enviaste ${sentToday()} hoy, por encima de lo recomendado (${dailyAllowance()}). El envío continúa; hay más riesgo de bloqueo.`, 'err'); }
+      if (!avisoHorario && hoursActive() && !inWindow()) { avisoHorario = true; log(`Aviso: envío fuera del horario recomendado (${cfg.hourFrom}:00–${cfg.hourTo}:00). Continúa.`); }
       const r = queue[i];
 
       if (sinceBreak >= nextPauseAt) {
