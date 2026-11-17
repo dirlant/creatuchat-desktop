@@ -7,7 +7,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
 
-const API = 'https://agendaconmigo-api.vercel.app/api/';
+const API = 'https://creatulink.com/api/';
 const WA_URL = 'https://web.whatsapp.com/';
 const SELFTEST = process.argv.includes('--selftest');
 const OUT = (process.argv.find((a) => a.startsWith('--out=')) || '').slice(6);
