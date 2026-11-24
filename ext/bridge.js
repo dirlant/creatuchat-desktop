@@ -80,6 +80,29 @@
       return out;
     },
 
+    // Números de teléfono de una lista de chats. @c.us trae el número en el id; los @lid se resuelven con el contacto (mejor esfuerzo).
+    async phonesOf({ ids }) {
+      const out = {};
+      for (const id of ids || []) {
+        const s = String(id);
+        if (/@c.us$/.test(s)) { out[s] = s.split('@')[0].replace(/D/g, ''); continue; }
+        let tel = '';
+        try {
+          const r = await WPP.contact.getPhoneNumber(s);
+          tel = String((r && (r.user || r._serialized)) || '').split('@')[0].replace(/D/g, '');
+        } catch {}
+        if (!tel) {
+          try {
+            const ct = WPP.whatsapp.ContactStore.get(s);
+            const pn = ct && (ct.phoneNumber || ct.pnUser);
+            tel = String((pn && (pn.user || pn._serialized)) || pn || '').split('@')[0].replace(/D/g, '');
+          } catch {}
+        }
+        out[s] = tel;
+      }
+      return out;
+    },
+
     // Hora (segundos) del último mensaje de la conversación, o 0 si no hay conversación previa. Solo lee, no marca nada como leído.
     async lastMsgTime({ id }) {
       let t = 0;
@@ -207,6 +230,17 @@
         type: 'image',
         filename: filename || 'imagen.jpg',
         caption: caption || undefined,
+        createChat: true,
+      });
+      return { id: res && res.id };
+    },
+
+    // Envía un audio (data URL). ptt=true: como nota de voz (OGG/OPUS); si no, como archivo de audio
+    async sendAudio({ to, dataUrl, filename, ptt }) {
+      const res = await WPP.chat.sendFileMessage(to, dataUrl, {
+        type: 'audio',
+        isPtt: !!ptt,
+        filename: filename || 'audio',
         createChat: true,
       });
       return { id: res && res.id };

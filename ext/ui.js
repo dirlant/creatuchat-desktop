@@ -194,6 +194,8 @@
         <div id="wam-pane-label">
           <div id="wam-llist" class="wam-list"></div>
           <div id="wam-lblsum" class="wam-hint"></div>
+          <button id="wam-lbldl" class="wam-btn alt" type="button" title="Descarga un Excel con los contactos de las etiquetas marcadas, para subirlo luego en «Por Excel»">⬇ Descargar contactos (Excel)</button>
+          <div id="wam-lbldlmsg" class="wam-hint"></div>
         </div>
         <div id="wam-pane-numeros" hidden>
           <p class="wam-hint"><b>Por número (manual).</b> Escribe el número completo, con código de país (ej: 56912345678), o varios separados por comas («,»).</p>
@@ -322,7 +324,7 @@
             <p class="wam-hint" id="wam-iapasos-vacio"><b>Pasos de cada palabra clave:</b> agrega una palabra arriba (o toca una que ya tengas) para decidir qué se envía primero —textos o imágenes— cuando un cliente la escriba, antes de que la IA empiece a responder.</p>
             <div id="wam-iapasos-cuerpo" hidden>
             <div class="wam-hint"><b id="wam-iapasos-tit">Pasos</b></div>
-            <div class="wam-hint">Cada paso puede ser un <b>texto</b> o una <b>imagen</b> (con un texto opcional).</div>
+            <div class="wam-hint">Cada paso puede ser un <b>texto</b>, una <b>imagen</b> (con un texto opcional) o un <b>audio</b>.</div>
             <label class="wam-sw"><span>Enviar estos pasos primero<small id="wam-kwsw-small">Cuando el cliente escriba esta palabra, se mandan en orden estos primeros pasos; solo después la IA empieza a responder.</small></span><input type="checkbox" id="iaPasosOn"><i></i></label>
             <div id="wam-iapasos-lista"></div>
             <div class="wam-row"><button id="wam-iapaso-add" class="wam-btn alt">+ Agregar paso</button><button id="wam-iapaso-def" class="wam-btn alt">Pasos por defecto</button></div>
@@ -852,6 +854,43 @@
       if (n) n.textContent = labelChats.get(lb.id).length;
       if (selected.has(lb.id)) rebuild();
     }
+  };
+  // descarga los contactos de las etiquetas marcadas en un Excel (Nombre, Telefono, Etiqueta) listo para subir en «Por Excel»
+  $('#wam-lbldl').onclick = async () => {
+    const msg = $('#wam-lbldlmsg'), btn = $('#wam-lbldl');
+    const ids = [...selected];
+    if (!ids.length) { msg.textContent = 'Marca primero una o varias etiquetas.'; return; }
+    btn.disabled = true; msg.textContent = 'Reuniendo contactos…';
+    try {
+      const porChat = new Map(); // chatId -> {name, etiquetas:[]}
+      for (const id of ids) {
+        const nombre = (data.labels.find((l) => l.id === id) || {}).name || id;
+        let chats = labelChats.get(id);
+        if (!chats) { chats = (await call('chatsByLabel', { labelId: id })).filter((c) => !c.isGroup).map((c) => ({ id: c.id, name: c.name })); labelChats.set(id, chats); }
+        chats.forEach((c) => { const e = porChat.get(c.id) || { name: c.name, et: [] }; e.et.push(nombre); porChat.set(c.id, e); });
+      }
+      if (!porChat.size) { msg.textContent = 'Las etiquetas marcadas no tienen contactos.'; return; }
+      const fonos = await call('phonesOf', { ids: [...porChat.keys()] });
+      const rows = [['Nombre', 'Telefono', 'Etiqueta']], vistos = new Set();
+      let sinNumero = 0;
+      porChat.forEach((e, cid) => {
+        const tel = fonos[cid] || '';
+        if (!tel) { sinNumero++; return; }
+        if (vistos.has(tel)) return;
+        vistos.add(tel);
+        rows.push([e.name && e.name.replace(/D/g, '') !== tel ? e.name : '', tel, e.et.join(', ')]);
+      });
+      if (rows.length < 2) { msg.textContent = 'No se pudo obtener el número de ningún contacto.'; return; }
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 26 }, { wch: 16 }, { wch: 28 }];
+      for (let r = 1; r < rows.length; r++) { const c = ws[XLSX.utils.encode_cell({ r, c: 1 })]; c.t = 's'; c.z = '@'; }
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Contactos');
+      const fecha = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, 'contactos-etiquetas-' + fecha + '.xlsx');
+      msg.textContent = (rows.length - 1) + ' contactos descargados' + (sinNumero ? ' · ' + sinNumero + ' sin número visible (omitidos)' : '') + '. Súbelo luego en «Por Excel».';
+      log('Contactos de ' + ids.length + ' etiqueta(s) descargados: ' + (rows.length - 1) + (sinNumero ? ' (' + sinNumero + ' sin número)' : ''), 'ok');
+    } catch (e) { msg.textContent = 'No se pudo descargar: ' + e.message; } finally { btn.disabled = false; }
   };
   let refreshTries = 0;
   const refreshData = async () => {
@@ -1639,7 +1678,25 @@
     return v || '';
   };
   const iaImgBorrar = (id) => { delete iaImgCache[id]; try { chrome.storage.local.remove(iaImgKey(id)); } catch {} };
-  const iaImgBorrarPaso = (x) => { const p = iaPasoNorm(x); if (p.tipo === 'imagen' && p.imgId) iaImgBorrar(p.imgId); };
+  const iaImgBorrarPaso = (x) => { const p = iaPasoNorm(x); if ((p.tipo === 'imagen' || p.tipo === 'audio') && p.imgId) iaImgBorrar(p.imgId); };
+  // audios de los pasos: se guardan tal cual (sin recodificar) en la misma clave de almacenamiento que las imágenes
+  const AUDIO_MAX = 8 * 1024 * 1024;
+  const audioEsOgg = (nombre, tipo) => /ogg|opus|oga/i.test(String(tipo || '')) || /\.(ogg|opus|oga)$/i.test(String(nombre || ''));
+  const audioMime = (f) => {
+    if (audioEsOgg(f.name, f.type)) return 'audio/ogg; codecs=opus'; // formato de las notas de voz de WhatsApp
+    if (f.type && /^audio\//.test(f.type)) return f.type;
+    const ext = (String(f.name || '').split('.').pop() || '').toLowerCase();
+    return { mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav', amr: 'audio/amr', mpeg: 'audio/mpeg', mp4: 'audio/mp4', '3gp': 'audio/3gpp', weba: 'audio/webm', webm: 'audio/webm', flac: 'audio/flac' }[ext] || '';
+  };
+  const audioLeer = (f) => new Promise((resolve, reject) => {
+    if (f.size > AUDIO_MAX) return reject(new Error('El audio pesa más de 8 MB'));
+    const mime = audioMime(f);
+    if (!mime) return reject(new Error('Formato no reconocido (usa OGG/OPUS, MP3, M4A, AAC, WAV o AMR)'));
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('No se pudo leer el audio'));
+    fr.onload = () => resolve({ dataUrl: fr.result, mime });
+    fr.readAsDataURL(new Blob([f], { type: mime }));
+  });
   const iaImg = {
     // reduce la imagen (máx. 1280 px, JPEG) para que pese poco y se envíe rápido
     comprimir: (file) => new Promise((resolve, reject) => {
@@ -1674,7 +1731,7 @@
   const iaPasosDe = (k, st) => {
     const p = (st || cfg.ia).pasos[iaNorm(k)];
     if (!p || !p.on) return null;
-    const pasos = (p.textos || []).map(iaPasoNorm).filter((x) => (x.tipo === 'imagen' ? !!x.imgId : !!String(x.texto || '').trim()));
+    const pasos = (p.textos || []).map(iaPasoNorm).filter((x) => (x.tipo === 'imagen' || x.tipo === 'audio' ? !!x.imgId : !!String(x.texto || '').trim()));
     return pasos.length ? { pasos } : null;
   };
   const renderIaPasos = () => {
@@ -1698,14 +1755,15 @@
       n.textContent = 'Paso ' + (i + 1);
       const tipos = document.createElement('div');
       tipos.className = 'wam-seg wam-seg-mini';
-      [['texto', 'Texto'], ['imagen', 'Imagen']].forEach(([tipo, rotulo]) => {
+      [['texto', 'Texto'], ['imagen', 'Imagen'], ['audio', 'Audio']].forEach(([tipo, rotulo]) => {
         const b = document.createElement('button');
         b.textContent = rotulo;
         b.className = paso.tipo === tipo ? 'on' : '';
         b.onclick = () => {
           if (paso.tipo === tipo) return;
           iaImgBorrarPaso(paso);
-          p.textos[i] = tipo === 'imagen' ? { tipo: 'imagen', imgId: '', nombre: '', caption: '' } : { tipo: 'texto', texto: '' };
+          p.textos[i] = tipo === 'imagen' ? { tipo: 'imagen', imgId: '', nombre: '', caption: '' }
+            : tipo === 'audio' ? { tipo: 'audio', imgId: '', nombre: '', mime: '' } : { tipo: 'texto', texto: '' };
           save(); renderIaKwChips();
         };
         tipos.appendChild(b);
@@ -1752,6 +1810,39 @@
         cap.placeholder = 'Texto que acompaña la imagen (opcional)';
         cap.oninput = () => { paso.caption = cap.value; save(); };
         row.append(vista, lab, cap);
+      } else if (paso.tipo === 'audio') {
+        const player = document.createElement('audio');
+        player.controls = true;
+        player.style.cssText = 'display:block;width:100%;margin:6px 0';
+        player.hidden = !paso.imgId;
+        if (paso.imgId) iaImgCargar(paso.imgId).then((d) => { if (d) player.src = d; else player.hidden = true; });
+        const lab = document.createElement('label');
+        lab.className = 'wam-file';
+        const fi = document.createElement('input');
+        fi.type = 'file';
+        fi.accept = 'audio/*,.ogg,.opus,.oga,.mp3,.m4a,.aac,.wav,.amr,.3gp,.flac';
+        const sp = document.createElement('span');
+        sp.textContent = paso.imgId ? 'Cambiar audio (' + (paso.nombre || 'audio') + ')' : 'Elegir audio…';
+        fi.onchange = async () => {
+          const f = fi.files && fi.files[0];
+          if (!f) return;
+          try {
+            const { dataUrl, mime } = await audioLeer(f);
+            if (paso.imgId) iaImgBorrar(paso.imgId);
+            const id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            await iaImgGuardar(id, dataUrl);
+            paso.imgId = id;
+            paso.nombre = f.name || 'audio';
+            paso.mime = mime;
+            iaWarn('');
+            save(); renderIaKwChips();
+          } catch (e) { iaWarn('No se pudo usar el audio: ' + e.message); }
+        };
+        lab.append(fi, sp);
+        const nota = document.createElement('div');
+        nota.className = 'wam-hint';
+        nota.textContent = 'Los audios OGG/OPUS (los de WhatsApp) se envían como nota de voz; MP3, M4A, WAV, AAC y AMR, como archivo de audio. Máximo 8 MB.';
+        row.append(player, lab, nota);
       } else {
         const ta = document.createElement('textarea');
         ta.rows = 2;
@@ -1967,7 +2058,7 @@
           const p = iaPasoNorm(x);
           const d = document.createElement('div');
           d.className = 'wam-iapaso';
-          d.textContent = (i + 1) + '. ' + (p.tipo === 'imagen' ? '🖼 Imagen' + (p.nombre ? ': ' + p.nombre : '') + (p.caption ? ' — «' + p.caption + '»' : '') : p.texto);
+          d.textContent = (i + 1) + '. ' + (p.tipo === 'audio' ? '🎤 Audio' + (p.nombre ? ': ' + p.nombre : '') : p.tipo === 'imagen' ? '🖼 Imagen' + (p.nombre ? ': ' + p.nombre : '') + (p.caption ? ' — «' + p.caption + '»' : '') : p.texto);
           card.appendChild(d);
         });
       } else {
@@ -2071,6 +2162,10 @@
           const dataUrl = await iaImgCargar(paso.imgId);
           if (!dataUrl) throw new Error('no se encontró la imagen del paso ' + (i + 1) + ' (vuelve a elegirla)');
           await call('sendImage', { to: chat.id, dataUrl, caption: vars(paso.caption), filename: paso.nombre || 'imagen.jpg' });
+        } else if (paso.tipo === 'audio') {
+          const dataUrl = await iaImgCargar(paso.imgId);
+          if (!dataUrl) throw new Error('no se encontró el audio del paso ' + (i + 1) + ' (vuelve a elegirlo)');
+          await call('sendAudio', { to: chat.id, dataUrl, filename: paso.nombre || 'audio', ptt: audioEsOgg(paso.nombre, paso.mime) });
         } else {
           const t = vars(paso.texto);
           if (!t) continue;
